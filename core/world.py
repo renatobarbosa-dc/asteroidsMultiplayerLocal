@@ -23,7 +23,8 @@ class World:
     - World generates events (strings) for the client (sounds/effects).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, player_count: int = 1) -> None:
+        self.player_count = max(1, min(C.MAX_PLAYERS, int(player_count)))
         self.ships: Dict[PlayerId, Ship] = {}
         self.bullets = pg.sprite.Group()
         self.asteroids = pg.sprite.Group()
@@ -33,6 +34,7 @@ class World:
 
         self.scores: Dict[PlayerId, int] = {}
         self.lives: Dict[PlayerId, int] = {}
+        self.player_spawn_positions: Dict[PlayerId, Vec] = {}
         self.wave = 0
         self.wave_cool = float(C.WAVE_DELAY)
         self.ufo_timer = float(C.UFO_SPAWN_EVERY)
@@ -49,17 +51,58 @@ class World:
         self.time_stop_timer = 0.0
         self.time_stop_cool = 0.0
 
-        self.spawn_player(C.LOCAL_PLAYER_ID)
+        for pid in range(1, self.player_count + 1):
+            self.spawn_player(pid)
 
     def begin_frame(self) -> None:
         self.events.clear()
 
-    def reset(self) -> None:
-        """Reset the world (used on Game Over)."""
-        self.__init__()
+    def reset(self, player_count: int | None = None) -> None:
+        """Recomeça o mundo; opcionalmente altera o número de jogadores."""
+        n = self.player_count if player_count is None else player_count
+        self.__init__(n)
+
+    def _spawn_screen_pad(self) -> float:
+        """Distância mínima à borda para a nave inteira ficar visível no ecrã."""
+        return float(C.SHIP_RADIUS) * 2.5 + 48.0
+
+    def _clamp_pos_to_screen(self, pos: Vec) -> Vec:
+        pad = self._spawn_screen_pad()
+        w, h = float(C.WIDTH), float(C.HEIGHT)
+        return Vec(max(pad, min(w - pad, pos.x)), max(pad, min(h - pad, pos.y)))
+
+    def _spawn_pos_for_player(self, player_id: PlayerId) -> Vec:
+        w, h = float(C.WIDTH), float(C.HEIGHT)
+        cx, cy = w / 2, h / 2
+        if self.player_count <= 1:
+            return self._clamp_pos_to_screen(Vec(cx, cy))
+
+        # Posições no interior (quadrantes / metades), não coladas ao canto físico.
+        if self.player_count == 2:
+            raw = {
+                1: Vec(w * 0.28, cy),
+                2: Vec(w * 0.72, cy),
+            }
+        elif self.player_count == 3:
+            raw = {
+                1: Vec(w * 0.28, h * 0.32),
+                2: Vec(cx, h * 0.62),
+                3: Vec(w * 0.72, h * 0.32),
+            }
+        else:
+            raw = {
+                1: Vec(w * 0.28, h * 0.28),
+                2: Vec(w * 0.72, h * 0.28),
+                3: Vec(w * 0.28, h * 0.72),
+                4: Vec(w * 0.72, h * 0.72),
+            }
+
+        pos = raw.get(player_id, Vec(cx, cy))
+        return self._clamp_pos_to_screen(pos)
 
     def spawn_player(self, player_id: PlayerId) -> None:
-        pos = Vec(C.WIDTH / 2, C.HEIGHT / 2)
+        pos = self._spawn_pos_for_player(player_id)
+        self.player_spawn_positions[player_id] = Vec(pos)
         ship = Ship(player_id, pos)
         ship.invuln = float(C.SAFE_SPAWN_TIME)
 
@@ -108,10 +151,10 @@ class World:
         self.powerups.add(powerup)
         self.all_sprites.add(powerup)
 
-    def spawn_black_hole(self, ship: Ship):
-        """Handles blackhole spawwning based on player pos"""
+    def spawn_black_hole(self) -> None:
+        """Cria buraco negro longe de todas as naves."""
         pos = Vec(uniform(0, C.WIDTH), uniform(0, C.HEIGHT))
-        while (pos - ship.pos).length() < 200:
+        while any((pos - s.pos).length() < 200 for s in self.ships.values()):
             pos = Vec(uniform(0, C.WIDTH), uniform(0, C.HEIGHT))
 
         bh = BlackHole(pos)
@@ -119,9 +162,8 @@ class World:
         self.all_sprites.add(bh)
         self.bh_duration = uniform(C.BH_DURATION_MIN, C.BH_DURATION_MAX)
 
-    def _update_blackhole(self, dt: float, ship: Ship):
-        """Handles blackhole timers and effects"""
-        # Handle blackhole spawn time
+    def _update_blackhole(self, dt: float) -> None:
+        """Um passo global de temporizador + gravidade em todas as naves."""
         if self.black_hole:
             self.bh_duration -= dt
             if self.bh_duration <= 0:
@@ -131,18 +173,19 @@ class World:
         else:
             self.bh_timer -= dt
             if self.bh_timer <= 0:
-                self.spawn_black_hole(ship)
+                self.spawn_black_hole()
 
-        # Blackhole Gravity effect
-        if self.black_hole:
+        if not self.black_hole:
+            return
+
+        for ship in self.ships.values():
             dir_vec = self.black_hole.pos - ship.pos
             dist = dir_vec.length()
-
-            if dist > 0:
-                dir_vec = dir_vec.normalize()
-                # reduces based on distance
-                force = self.black_hole.strength / (dist + 1)
-                ship.vel += dir_vec * force * dt * 50
+            if dist <= 0:
+                continue
+            dir_vec = dir_vec.normalize()
+            force = self.black_hole.strength / (dist + 1)
+            ship.vel += dir_vec * force * dt * 50
 
     def update(
         self,
@@ -176,7 +219,7 @@ class World:
                 self.bullets.add(*created)
                 self.all_sprites.add(*created)
 
-            self._update_blackhole(dt, ship)
+        self._update_blackhole(dt)
         for bullet in self.bullets:
             bullet.update(dt)
         for ast in self.asteroids:
@@ -325,7 +368,9 @@ class World:
     def _ship_die(self, ship: Ship, is_instakill: bool) -> None:
         pid = ship.player_id
         self.lives[pid] = self.lives[pid] - 1
-        ship.pos.xy = (C.WIDTH / 2, C.HEIGHT / 2)
+        base = self.player_spawn_positions.get(pid, Vec(C.WIDTH / 2, C.HEIGHT / 2))
+        safe = self._clamp_pos_to_screen(Vec(base))
+        ship.pos.xy = (safe.x, safe.y)
         ship.vel.xy = (0, 0)
         ship.angle = -90.0
         ship.invuln = float(C.SAFE_SPAWN_TIME)
