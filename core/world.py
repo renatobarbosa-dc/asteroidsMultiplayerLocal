@@ -34,6 +34,7 @@ class World:
 
         self.scores: Dict[PlayerId, int] = {}
         self.lives: Dict[PlayerId, int] = {}
+        self.flags_collected: Dict[PlayerId, int] = {}
         self.player_spawn_positions: Dict[PlayerId, Vec] = {}
         self.wave = 0
         self.wave_cool = float(C.WAVE_DELAY)
@@ -48,6 +49,7 @@ class World:
         self._collision_mgr = CollisionManager()
 
         self.game_over = False
+        self.winner_id: PlayerId | None = None
 
         for pid in range(1, self.player_count + 1):
             self.spawn_player(pid)
@@ -107,6 +109,7 @@ class World:
         self.ships[player_id] = ship
         self.scores[player_id] = 0
         self.lives[player_id] = C.START_LIVES
+        self.flags_collected[player_id] = 0
         self.all_sprites.add(ship)
 
     def get_ship(self, player_id: PlayerId) -> Ship | None:
@@ -340,6 +343,16 @@ class World:
                         C.SPECIAL_MAX, ship.special_energy + C.SPECIAL_PER_ORB
                     )
                     self.events.append("powerup_pick")
+
+                elif powerup.kind == "flag":
+                    self.flags_collected[ship.player_id] += 1
+                    self.events.append("powerup_pick")
+                    
+                    # Verificar se o jogador ganhou
+                    if self.flags_collected[ship.player_id] >= C.FLAGS_TO_WIN:
+                        self.game_over = True
+                        self.winner_id = ship.player_id
+                        self.events.append("flag_victory")
 
                 powerup.kill()
 

@@ -150,7 +150,7 @@ class Game:
             return
 
         if self.scene == SceneState.GAME_OVER:
-            self.renderer.draw_game_over()
+            self.renderer.draw_game_over(self.world)
             pg.display.flip()
             return
 
