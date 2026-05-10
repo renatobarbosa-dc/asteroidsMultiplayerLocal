@@ -54,10 +54,12 @@ class Renderer:
         ships = getattr(world, "ships", {})
         scores = getattr(world, "scores", {})
         lives = getattr(world, "lives", {})
+        flags = getattr(world, "flags_collected", {})
         pid = min(ships.keys()) if ships else 1
         ship = ships.get(pid)
         score = int(scores.get(pid, 0))
         lives_n = int(lives.get(pid, 0))
+        flags_n = int(flags.get(pid, 0))
         wave = int(getattr(world, "wave", 0))
         double_shot_time = ship.double_shot_time if ship else 0.0
         shield_time = ship.shield_time if ship else 0.0
@@ -65,7 +67,7 @@ class Renderer:
         time_stop_timer = float(getattr(world, "time_stop_timer", 0.0))
         time_stop_cool = float(getattr(world, "time_stop_cool", 0.0))
 
-        text = f"SCORE {score:06d}   LIVES {lives_n}   WAVE {wave}"
+        text = f"SCORE {score:06d}   LIVES {lives_n}   WAVE {wave}   BANDEIRAS {flags_n}/{self.config.FLAGS_TO_WIN}"
         self.screen.blit(self.font.render(text, True, self.config.WHITE), (10, 10))
 
         bar_w = 180
@@ -180,6 +182,7 @@ class Renderer:
         ships = getattr(world, "ships", {})
         scores = getattr(world, "scores", {})
         lives = getattr(world, "lives", {})
+        flags = getattr(world, "flags_collected", {})
         corners = [
             (12, 72),
             (self.config.WIDTH - 248, 72),
@@ -194,7 +197,8 @@ class Renderer:
             x, y = corners[idx] if idx < len(corners) else (12, 72)
             sc = int(scores.get(pid, 0))
             lv = int(lives.get(pid, 0))
-            line = self.font.render(f"P{pid}  {sc:06d}  x{lv}", True, col)
+            fl = int(flags.get(pid, 0))
+            line = self.font.render(f"P{pid}  {sc:06d}  x{lv}  🚩{fl}", True, col)
             self.screen.blit(line, (x, y))
             ratio = min(1.0, max(0.0, ship.special_energy / self.config.SPECIAL_MAX))
             by = y + 26
@@ -265,18 +269,40 @@ class Renderer:
             460,
         )
 
-    def draw_game_over(self) -> None:
-        self._draw_text(
-            self.big,
-            "GAME OVER",
-            self.config.WIDTH // 2 - 170,
-            260,
-        )
+    def draw_game_over(self, world: object = None) -> None:
+        winner_id = getattr(world, "winner_id", None) if world else None
+        
+        if winner_id is not None:
+            # Vitória por bandeiras
+            player_color = self.config.PLAYER_COLORS.get(winner_id, self.config.WHITE)
+            title = f"JOGADOR {winner_id} VENCEU!"
+            title_surf = self.big.render(title, True, player_color)
+            self._draw_text(
+                self.big,
+                title,
+                self.config.WIDTH // 2 - title_surf.get_width() // 2,
+                220,
+            )
+            self._draw_text(
+                self.font,
+                f"Coletou {self.config.FLAGS_TO_WIN} bandeiras!",
+                self.config.WIDTH // 2 - 180,
+                300,
+            )
+        else:
+            # Game over normal
+            self._draw_text(
+                self.big,
+                "GAME OVER",
+                self.config.WIDTH // 2 - 170,
+                260,
+            )
+        
         self._draw_text(
             self.font,
             "(Qualquer tecla — voltar ao menu de jogadores)",
             self.config.WIDTH // 2 - 320,
-            340,
+            360,
         )
 
     def _draw_text(
@@ -381,6 +407,20 @@ class Renderer:
 
         elif powerup.kind == "orb":
             pg.draw.circle(self.screen, self.config.PURPLE, center, r, 1)
+
+        elif powerup.kind == "flag":
+            # Bandeira: haste + bandeira triangular
+            pole_bottom = (center[0] - r, center[1] + r)
+            pole_top = (center[0] - r, center[1] - r)
+            # Haste
+            pg.draw.line(self.screen, self.config.YELLOW, pole_bottom, pole_top, 2)
+            # Bandeira triangular
+            flag_points = [
+                pole_top,
+                (center[0] + r, center[1] - r // 2),
+                (center[0] - r, center[1]),
+            ]
+            pg.draw.polygon(self.screen, self.config.ORANGE, flag_points, width=1)
 
         else:
             points = [

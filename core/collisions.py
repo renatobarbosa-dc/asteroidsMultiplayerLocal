@@ -211,6 +211,8 @@ class CollisionManager:
                 result.powerups_to_spawn.append((Vec(ast.pos), "orb"))
             elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE:
                 result.powerups_to_spawn.append((Vec(ast.pos), "double_shot"))
+            elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE + C.FLAG_DROP_CHANCE:
+                result.powerups_to_spawn.append((Vec(ast.pos), "flag"))
 
         split = C.AST_SIZES[ast.size]["split"]
         pos = Vec(ast.pos)
