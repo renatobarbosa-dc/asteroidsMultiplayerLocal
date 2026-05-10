@@ -9,6 +9,8 @@ from core import config as C
 from core.entities import Asteroid, Ship, UFO_BULLET_OWNER, PlayerId
 from core.utils import Vec, rand_unit_vec
 
+PVP_KILL_SCORE = 500
+
 
 @dataclass
 class CollisionResult:
@@ -39,6 +41,7 @@ class CollisionManager:
         self._ship_vs_asteroids(ships, asteroids, result)
         self._ship_vs_ufo_bullets(ships, bullets, result)
         self._ship_vs_black_hole(ships, black_hole, result)
+        self._ship_vs_ship_bullets(ships, bullets, result)
         return result
 
     def _bullets_vs_asteroids(
@@ -157,6 +160,35 @@ class CollisionManager:
                         return
                     result.ship_deaths.append({ship.player_id: False})
                     return
+
+    def _ship_vs_ship_bullets(
+        self,
+        ships: dict[PlayerId, Ship],
+        bullets: pg.sprite.Group,
+        result: CollisionResult,
+    ) -> None:
+        """Player bullets hitting other players (PvP)."""
+        for ship in ships.values():
+            if ship.invuln > 0.0:
+                continue
+            for bullet in list(bullets):
+                # Only player bullets; skip own bullets
+                if bullet.owner_id <= 0 or bullet.owner_id == ship.player_id:
+                    continue
+                if (bullet.pos - ship.pos).length() >= (bullet.r + ship.r):
+                    continue
+
+                bullet.kill()
+                if ship.consume_shield_hit():
+                    result.events.append("shield_block")
+                    return
+
+                result.score_deltas[bullet.owner_id] = (
+                    result.score_deltas.get(bullet.owner_id, 0) + PVP_KILL_SCORE
+                )
+                result.ship_deaths.append({ship.player_id: False})
+                result.events.append("ship_explosion")
+                return
 
     def _split_asteroid(
         self,

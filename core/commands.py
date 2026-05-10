@@ -13,5 +13,4 @@ class PlayerCommand:
     shoot: bool = False
     shield: bool = False
     hyperspace: bool = False
-    time_stop: bool = False
     special: bool = False

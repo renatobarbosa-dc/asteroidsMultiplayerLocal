@@ -48,8 +48,6 @@ class World:
         self._collision_mgr = CollisionManager()
 
         self.game_over = False
-        self.time_stop_timer = 0.0
-        self.time_stop_cool = 0.0
 
         for pid in range(1, self.player_count + 1):
             self.spawn_player(pid)
@@ -196,20 +194,8 @@ class World:
 
         if self.game_over:
             return
-        # Handle time stop timer
-        if self.time_stop_timer > 0.0:
-            self.time_stop_timer -= dt
-            if self.time_stop_timer < 0.0:
-                self.time_stop_timer = 0.0
-            enemy_dt = 0.0
-        else:
-            enemy_dt = dt
 
-        # Handle time stop cooldown
-        if self.time_stop_cool > 0.0:
-            self.time_stop_cool -= dt
-            if self.time_stop_cool < 0.0:
-                self.time_stop_cool = 0.0
+        enemy_dt = dt
 
         self._apply_commands(dt, commands_by_player_id)
 
@@ -227,8 +213,9 @@ class World:
         for powerup in self.powerups:
             powerup.update(dt)
 
-        self._update_ufos(enemy_dt)
-        self._update_timers(dt)
+        if self.player_count == 1:
+            self._update_ufos(enemy_dt)
+            self._update_timers(dt)
         self._handle_collisions()
         self._collect_powerups()
         self._maybe_start_next_wave(dt)
@@ -242,15 +229,6 @@ class World:
             ship = self.get_ship(player_id)
             if ship is None:
                 continue
-
-            if (
-                cmd.time_stop
-                and self.time_stop_timer <= 0.0
-                and self.time_stop_cool <= 0.0
-            ):
-                self.time_stop_timer = float(C.TIME_STOP_DURATION)
-                self.time_stop_cool = float(C.TIME_STOP_DURATION + C.TIME_STOP_COOLDOWN)
-                self.events.append("time_stop")
 
             if cmd.shield and ship.try_activate_shield():
                 self.events.append("shield_on")
@@ -367,14 +345,26 @@ class World:
 
     def _ship_die(self, ship: Ship, is_instakill: bool) -> None:
         pid = ship.player_id
-        self.lives[pid] = self.lives[pid] - 1
+        self.lives[pid] -= 1
+
+        if self.lives[pid] <= 0 or is_instakill:
+            # Eliminate the player permanently
+            self.lives[pid] = 0
+            ship.kill()
+            del self.ships[pid]
+            self.events.append("ship_explosion")
+
+            alive = [p for p, v in self.lives.items() if v > 0]
+            # Solo: game over immediately; multiplayer: last one standing wins
+            if self.player_count == 1 or len(alive) <= 1:
+                self.game_over = True
+            return
+
+        # Still has lives — respawn in place
         base = self.player_spawn_positions.get(pid, Vec(C.WIDTH / 2, C.HEIGHT / 2))
         safe = self._clamp_pos_to_screen(Vec(base))
         ship.pos.xy = (safe.x, safe.y)
         ship.vel.xy = (0, 0)
         ship.angle = -90.0
         ship.invuln = float(C.SAFE_SPAWN_TIME)
-
         self.events.append("ship_explosion")
-        if all(v <= 0 for v in self.lives.values()) or is_instakill:
-            self.game_over = True
