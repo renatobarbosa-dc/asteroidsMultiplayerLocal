@@ -9,6 +9,13 @@ FPS = 120
 MAX_PLAYERS = 4
 LOCAL_PLAYER_ID = 1
 
+PLAYER_COLORS: dict[int, tuple[int, int, int]] = {
+    1: (255, 120, 120),
+    2: (120, 200, 255),
+    3: (160, 255, 140),
+    4: (255, 220, 100),
+}
+
 START_LIVES = 3
 SAFE_SPAWN_TIME = 2.0
 WAVE_DELAY = 2.0

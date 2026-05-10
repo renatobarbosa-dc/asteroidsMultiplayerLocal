@@ -41,25 +41,32 @@ class Renderer:
             if drawer is not None:
                 drawer(sprite)
 
-    def draw_hud(
-        self,
-        score: int,
-        lives: int,
-        wave: int,
-        state: SceneState,
-        double_shot_time: float = 0.0,
-        shield_time: float = 0.0,
-        shield_cool: float = 0.0,
-        time_stop_timer: float = 0.0,
-        time_stop_cool: float = 0.0,
-        ship=None,
-    ) -> None:
+    def draw_hud(self, world: object, state: SceneState) -> None:
         if state != SceneState.PLAY:
             return
+        ships = getattr(world, "ships", {})
+        if len(ships) <= 1:
+            self._draw_hud_single(world)
+        else:
+            self._draw_hud_multi(world)
 
-        text = f"SCORE {score:06d}   LIVES {lives}   WAVE {wave}"
-        label = self.font.render(text, True, self.config.WHITE)
-        self.screen.blit(label, (10, 10))
+    def _draw_hud_single(self, world: object) -> None:
+        ships = getattr(world, "ships", {})
+        scores = getattr(world, "scores", {})
+        lives = getattr(world, "lives", {})
+        pid = min(ships.keys()) if ships else 1
+        ship = ships.get(pid)
+        score = int(scores.get(pid, 0))
+        lives_n = int(lives.get(pid, 0))
+        wave = int(getattr(world, "wave", 0))
+        double_shot_time = ship.double_shot_time if ship else 0.0
+        shield_time = ship.shield_time if ship else 0.0
+        shield_cool = ship.shield_cool if ship else 0.0
+        time_stop_timer = float(getattr(world, "time_stop_timer", 0.0))
+        time_stop_cool = float(getattr(world, "time_stop_cool", 0.0))
+
+        text = f"SCORE {score:06d}   LIVES {lives_n}   WAVE {wave}"
+        self.screen.blit(self.font.render(text, True, self.config.WHITE), (10, 10))
 
         bar_w = 180
         bar_h = 10
@@ -68,14 +75,12 @@ class Renderer:
         if double_shot_time > 0.0:
             max_time = float(self.config.DOUBLE_SHOT_DURATION)
             ratio = min(1.0, max(0.0, double_shot_time / max_time))
-
             info = self.font.render(
                 f"DOUBLE SHOT {double_shot_time:0.1f}s",
                 True,
                 self.config.WHITE,
             )
             self.screen.blit(info, (bar_x, 10))
-
             border = pg.Rect(bar_x, 40, bar_w, bar_h)
             fill = pg.Rect(bar_x, 40, int(bar_w * ratio), bar_h)
             pg.draw.rect(self.screen, self.config.WHITE, border, width=1)
@@ -84,26 +89,14 @@ class Renderer:
 
         if ship:
             ratio = ship.special_energy / self.config.SPECIAL_MAX
-            x = 10
-            y = 60
-            w = 150
-            h = 8
-
-            special_label = "SPECIAL"
-            if ratio >= 1.0:
-                special_label = "FULL SPECIAL"
-
-            label = self.font.render(special_label, True, self.config.WHITE)
-            self.screen.blit(label, (x, y - 20))
-
-            border = pg.Rect(x, y, w, h)
-            fill = pg.Rect(x, y, int(w * ratio), h)
-            pg.draw.rect(self.screen, self.config.WHITE, border, 1)
-            if fill.width > 0:
-                pg.draw.rect(self.screen, self.config.WHITE, fill)
-
-            border = pg.Rect(x, y, w, h)
-            fill = pg.Rect(x, y, int(w * ratio), h)
+            x, y, w = 10, 60, 150
+            special_label = "FULL SPECIAL" if ratio >= 1.0 else "SPECIAL"
+            self.screen.blit(
+                self.font.render(special_label, True, self.config.WHITE),
+                (x, y - 20),
+            )
+            border = pg.Rect(x, y, w, 8)
+            fill = pg.Rect(x, y, int(w * ratio), 8)
             pg.draw.rect(self.screen, self.config.WHITE, border, 1)
             if fill.width > 0:
                 pg.draw.rect(self.screen, self.config.WHITE, fill)
@@ -124,9 +117,10 @@ class Renderer:
             shield_ratio = 1.0
 
         shield_y = 56 if double_shot_time > 0.0 else 10
-        shield_info = self.font.render(shield_label, True, self.config.WHITE)
-        self.screen.blit(shield_info, (bar_x, shield_y))
-
+        self.screen.blit(
+            self.font.render(shield_label, True, self.config.WHITE),
+            (bar_x, shield_y),
+        )
         shield_border = pg.Rect(bar_x, shield_y + 30, bar_w, bar_h)
         shield_fill = pg.Rect(bar_x, shield_y + 30, int(bar_w * shield_ratio), bar_h)
         pg.draw.rect(self.screen, self.config.WHITE, shield_border, width=1)
@@ -134,57 +128,141 @@ class Renderer:
             pg.draw.rect(self.screen, self.config.WHITE, shield_fill, width=0)
 
         if time_stop_timer > 0.0:
-            ts_label = f"TIME STOP {time_stop_timer:.1f}s"
+            ts_label = f"PARAR TEMPO {time_stop_timer:.1f}s"
             ts_ratio = min(1.0, time_stop_timer / self.config.TIME_STOP_DURATION)
-            ts_color = self.config.WHITE
         elif time_stop_cool > 0.0:
-            ts_label = f"TIME STOP CD {time_stop_cool:.1f}s"
+            ts_label = f"PARAR TEMPO CD {time_stop_cool:.1f}s"
             total = self.config.TIME_STOP_DURATION + self.config.TIME_STOP_COOLDOWN
             ts_ratio = 1.0 - min(1.0, time_stop_cool / total)
-            ts_color = self.config.WHITE
         else:
-            ts_label = "TIME STOP READY"
+            ts_label = "PARAR TEMPO PRONTO"
             ts_ratio = 1.0
-            ts_color = self.config.WHITE
 
         ts_y = shield_y + 56
-        self.screen.blit(self.font.render(ts_label, True, ts_color), (bar_x, ts_y))
+        self.screen.blit(
+            self.font.render(ts_label, True, self.config.WHITE), (bar_x, ts_y)
+        )
         ts_border = pg.Rect(bar_x, ts_y + 30, bar_w, bar_h)
         ts_fill = pg.Rect(bar_x, ts_y + 30, int(bar_w * ts_ratio), bar_h)
-        pg.draw.rect(self.screen, ts_color, ts_border, width=1)
+        pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
         if ts_fill.width > 0:
-            pg.draw.rect(self.screen, ts_color, ts_fill)
+            pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
+
+    def _draw_hud_multi(self, world: object) -> None:
+        wave = int(getattr(world, "wave", 0))
+        tw = self.font.render(f"WAVE {wave}", True, self.config.WHITE)
+        cx = self.config.WIDTH // 2 - tw.get_width() // 2
+        self.screen.blit(tw, (cx, 8))
+
+        time_stop_timer = float(getattr(world, "time_stop_timer", 0.0))
+        time_stop_cool = float(getattr(world, "time_stop_cool", 0.0))
+        bar_w, bar_h = 200, 8
+        bar_x = self.config.WIDTH // 2 - bar_w // 2
+        if time_stop_timer > 0.0:
+            ts_label = f"PARAR TEMPO {time_stop_timer:.1f}s"
+            ts_ratio = min(1.0, time_stop_timer / self.config.TIME_STOP_DURATION)
+        elif time_stop_cool > 0.0:
+            ts_label = f"PARAR TEMPO CD {time_stop_cool:.1f}s"
+            total = self.config.TIME_STOP_DURATION + self.config.TIME_STOP_COOLDOWN
+            ts_ratio = 1.0 - min(1.0, time_stop_cool / total)
+        else:
+            ts_label = "PARAR TEMPO PRONTO"
+            ts_ratio = 1.0
+
+        ts_y = 36
+        self.screen.blit(self.font.render(ts_label, True, self.config.WHITE), (bar_x, ts_y))
+        ts_border = pg.Rect(bar_x, ts_y + 22, bar_w, bar_h)
+        ts_fill = pg.Rect(bar_x, ts_y + 22, int(bar_w * ts_ratio), bar_h)
+        pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
+        if ts_fill.width > 0:
+            pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
+
+        ships = getattr(world, "ships", {})
+        scores = getattr(world, "scores", {})
+        lives = getattr(world, "lives", {})
+        corners = [
+            (12, 72),
+            (self.config.WIDTH - 248, 72),
+            (12, self.config.HEIGHT - 88),
+            (self.config.WIDTH - 248, self.config.HEIGHT - 88),
+        ]
+        bar_mini_w = 130
+        bar_mini_h = 5
+        for idx, pid in enumerate(sorted(ships.keys())):
+            ship = ships[pid]
+            col = getattr(ship, "color", self.config.WHITE)
+            x, y = corners[idx] if idx < len(corners) else (12, 72)
+            sc = int(scores.get(pid, 0))
+            lv = int(lives.get(pid, 0))
+            line = self.font.render(f"P{pid}  {sc:06d}  x{lv}", True, col)
+            self.screen.blit(line, (x, y))
+            ratio = min(1.0, max(0.0, ship.special_energy / self.config.SPECIAL_MAX))
+            by = y + 26
+            border = pg.Rect(x, by, bar_mini_w, bar_mini_h)
+            fill = pg.Rect(x, by, int(bar_mini_w * ratio), bar_mini_h)
+            pg.draw.rect(self.screen, col, border, width=1)
+            if fill.width > 0:
+                pg.draw.rect(self.screen, col, fill)
 
     def draw_menu(self) -> None:
         self._draw_text(
             self.big,
             "ASTEROIDS",
             self.config.WIDTH // 2 - 170,
-            130,
+            120,
         )
         self._draw_text(
             self.font,
-            "(Press any key to start)",
-            self.config.WIDTH // 2 - 170,
-            220,
+            "ENTER — escolher quantos jogadores (teclado)",
+            self.config.WIDTH // 2 - 320,
+            210,
         )
         self._draw_text(
             self.font,
-            "Move: W/UP | Turn: A,D or LEFT,RIGHT | Shoot: SPACE",
-            self.config.WIDTH // 2 - 330,
+            "Mandos (ex.: PlayStation) serão suportados numa atualização futura.",
+            self.config.WIDTH // 2 - 420,
+            250,
+        )
+        self._draw_text(
+            self.font,
+            "Qualquer outra tecla também abre o menu de jogadores",
+            self.config.WIDTH // 2 - 360,
             290,
         )
         self._draw_text(
             self.font,
-            "Shield: E | Hyperspace: LSHIFT | Time Stop: Q",
-            self.config.WIDTH // 2 - 290,
-            325,
+            "ESC — sair",
+            self.config.WIDTH // 2 - 80,
+            330,
+        )
+
+    def draw_player_select(self, highlight: int) -> None:
+        self._draw_text(
+            self.big,
+            "JOGADORES",
+            self.config.WIDTH // 2 - 160,
+            100,
+        )
+        h = max(1, min(4, int(highlight)))
+        y0 = 220
+        for n in range(1, 5):
+            prefix = ">" if n == h else " "
+            col = self.config.PLAYER_COLORS.get(n, self.config.WHITE)
+            line = f"{prefix}  {n} jogador{'es' if n != 1 else ''}"
+            surf = self.font.render(line, True, col if n == h else self.config.GRAY)
+            self.screen.blit(surf, (self.config.WIDTH // 2 - 120, y0 + (n - 1) * 40))
+
+        self._draw_text(
+            self.font,
+            "Tecla 1, 2, 3 ou 4 — começar já   |   SETAS + ENTER — confirmar",
+            self.config.WIDTH // 2 - 380,
+            420,
         )
         self._draw_text(
             self.font,
-            "Double Shot is a pickup (diamond on map)",
-            self.config.WIDTH // 2 - 260,
-            360,
+            "ESC — voltar ao menu inicial",
+            self.config.WIDTH // 2 - 180,
+            460,
         )
 
     def draw_game_over(self) -> None:
@@ -196,8 +274,8 @@ class Renderer:
         )
         self._draw_text(
             self.font,
-            "(Press any key to play again)",
-            self.config.WIDTH // 2 - 200,
+            "(Qualquer tecla — voltar ao menu de jogadores)",
+            self.config.WIDTH // 2 - 320,
             340,
         )
 
@@ -236,14 +314,15 @@ class Renderer:
             (int(p2.x), int(p2.y)),
             (int(p3.x), int(p3.y)),
         ]
-        pg.draw.polygon(self.screen, self.config.WHITE, points, width=1)
+        col = getattr(ship, "color", self.config.WHITE)
+        pg.draw.polygon(self.screen, col, points, width=1)
 
         if ship.has_active_shield():
             center = (int(ship.pos.x), int(ship.pos.y))
             pulse = 8 + int(ship.shield_time * 6) % 3
             pg.draw.circle(
                 self.screen,
-                self.config.WHITE,
+                col,
                 center,
                 ship.r + pulse,
                 width=1,
@@ -253,7 +332,7 @@ class Renderer:
             center = (int(ship.pos.x), int(ship.pos.y))
             pg.draw.circle(
                 self.screen,
-                self.config.WHITE,
+                col,
                 center,
                 ship.r + 6,
                 width=1,

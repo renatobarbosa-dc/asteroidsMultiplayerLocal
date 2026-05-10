@@ -134,6 +134,7 @@ class Ship(pg.sprite.Sprite):
         self.special_energy = 0.0
         self.special_active = False
         self.special_fire_cd = 0.0
+        self.color = C.PLAYER_COLORS.get(player_id, C.WHITE)
 
     def apply_command(
         self,

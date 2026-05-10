@@ -7,5 +7,6 @@ class SceneState(Enum):
     """Struct that manages game's scene state"""
 
     MENU = auto()
+    PLAYER_SELECT = auto()
     PLAY = auto()
     GAME_OVER = auto()
