@@ -28,8 +28,6 @@ class AudioManager:
                 self._sfx_ch.play(self.sounds.ship_explosion)
             elif ev == "powerup_pick":
                 self._sfx_ch.play(self.sounds.player_shoot)
-            elif ev == "time_stop":
-                self._sfx_ch.play(self.sounds.time_stop)
             elif ev == "hyperspace":
                 self._sfx_ch.play(self.sounds.hyperspace)
 

@@ -18,25 +18,21 @@ _KEYDOWN_ACTIONS: dict[int, tuple[PlayerId, str]] = {
     pg.K_SPACE: (1, "shoot"),
     pg.K_e: (1, "shield"),
     pg.K_LSHIFT: (1, "hyper"),
-    pg.K_q: (1, "time_stop"),
     pg.K_LCTRL: (1, "special"),
     # P2 — IJKL + teclas à direita do bloco
     pg.K_o: (2, "shoot"),
     pg.K_u: (2, "shield"),
     pg.K_p: (2, "hyper"),
-    pg.K_LEFTBRACKET: (2, "time_stop"),
     pg.K_RIGHTBRACKET: (2, "special"),
     # P3 — TFGH (estilo WASD no meio do teclado)
     pg.K_g: (3, "shoot"),
     pg.K_r: (3, "shield"),
     pg.K_v: (3, "hyper"),
-    pg.K_n: (3, "time_stop"),
     pg.K_m: (3, "special"),
     # P4 — setas + bloco acima das setas
     pg.K_RCTRL: (4, "shoot"),
     pg.K_RSHIFT: (4, "shield"),
     pg.K_END: (4, "hyper"),
-    pg.K_PAGEUP: (4, "time_stop"),
     pg.K_PAGEDOWN: (4, "special"),
 }
 
@@ -59,7 +55,6 @@ class InputMapper:
                 "shoot": False,
                 "shield": False,
                 "hyper": False,
-                "time_stop": False,
                 "special": False,
             }
             for pid in range(1, C.MAX_PLAYERS + 1)
@@ -92,7 +87,6 @@ class InputMapper:
                 shoot=ed["shoot"],
                 shield=ed["shield"],
                 hyperspace=ed["hyper"],
-                time_stop=ed["time_stop"],
                 special=ed["special"],
             )
             for k in ed:

@@ -44,8 +44,6 @@ DOUBLE_SHOT_DURATION = 8.0
 HYPERSPACE_COST = 250
 
 BULLET_SPAWN_OFFSET = 6
-TIME_STOP_DURATION = 10.0
-TIME_STOP_COOLDOWN = 15.0
 
 # SPECIAL (MINIGUN)
 SPECIAL_MAX = 30.0
@@ -138,6 +136,5 @@ SHIP_EXPLOSION = "ship_explosion.wav"
 THRUST_LOOP = "thrust_loop.wav"
 UFO_SIREN_BIG = "ufo_siren_big.wav"
 UFO_SIREN_SMALL = "ufo_siren_small.wav"
-TIME_STOP_SOUND = "time_stop.wav"
 HYPERSPACE = "hyperspace.wav"
 BLACKHOLE = "blackhole.wav"
