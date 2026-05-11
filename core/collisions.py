@@ -18,6 +18,7 @@ class CollisionResult:
 
     events: list[str] = field(default_factory=list)
     score_deltas: dict[PlayerId, int] = field(default_factory=dict)
+    kill_deltas: dict[PlayerId, int] = field(default_factory=dict)  # Contador de kills
     ship_deaths: list[dict[PlayerId, bool]] = field(default_factory=list)
     asteroids_to_spawn: list[tuple[Vec, Vec, str]] = field(default_factory=list)
     powerups_to_spawn: list[tuple[Vec, str]] = field(default_factory=list)
@@ -82,6 +83,10 @@ class CollisionManager:
                     score = C.UFO_SMALL["score"] if ufo.small else C.UFO_BIG["score"]
                     result.score_deltas[bullet.owner_id] = (
                         result.score_deltas.get(bullet.owner_id, 0) + score
+                    )
+                    # Adicionar +1 kill
+                    result.kill_deltas[bullet.owner_id] = (
+                        result.kill_deltas.get(bullet.owner_id, 0) + 1
                     )
                     ufo.kill()
                     bullet.kill()
@@ -185,6 +190,10 @@ class CollisionManager:
 
                 result.score_deltas[bullet.owner_id] = (
                     result.score_deltas.get(bullet.owner_id, 0) + PVP_KILL_SCORE
+                )
+                # Adicionar +1 kill em PvP
+                result.kill_deltas[bullet.owner_id] = (
+                    result.kill_deltas.get(bullet.owner_id, 0) + 1
                 )
                 result.ship_deaths.append({ship.player_id: False})
                 result.events.append("ship_explosion")
