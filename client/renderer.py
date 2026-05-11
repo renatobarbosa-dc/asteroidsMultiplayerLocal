@@ -205,7 +205,7 @@ class Renderer:
             fl = int(flags.get(pid, 0))
             kl = int(kills.get(pid, 0))
             # No multiplayer, vidas são infinitas, então mostramos só score, bandeiras e kills
-            line = self.font.render(f"P{pid}  {sc:06d}  🚩{fl}  ☠{kl}", True, col)
+            line = self.font.render(f"P{pid}  {sc:06d}  *{fl}  X{kl}", True, col)
             self.screen.blit(line, (x, y))
             ratio = min(1.0, max(0.0, ship.special_energy / self.config.SPECIAL_MAX))
             by = y + 26
@@ -298,9 +298,9 @@ class Renderer:
             winner_kills = kills.get(winner_id, 0)
             
             if winner_flags >= self.config.FLAGS_TO_WIN:
-                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras! 🚩"
+                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras! *{fl}"
             else:
-                reason = f"Mais kills: {winner_kills} ☠"
+                reason = f"Mais kills: {winner_kills} X{kl}"
             
             self._draw_text(
                 self.font,

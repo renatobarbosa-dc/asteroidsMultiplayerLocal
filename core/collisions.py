@@ -27,6 +27,9 @@ class CollisionResult:
 class CollisionManager:
     """Resolves all collisions between game entities."""
 
+    def __init__(self, is_multiplayer: bool = False):
+        self.is_multiplayer = is_multiplayer
+
     def resolve(
         self,
         ships: dict[PlayerId, Ship],
@@ -200,36 +203,37 @@ class CollisionManager:
                 return
 
     def _split_asteroid(
-        self,
-        ast: Asteroid,
-        result: CollisionResult,
-        scorer_id: PlayerId | None = None,
-    ) -> None:
-        """Split or destroy an asteroid.
+    	self,
+    	ast: Asteroid,
+    	result: CollisionResult,
+    	scorer_id: PlayerId | None = None,) -> None:
+    	"""Split or destroy an asteroid.
 
-        scorer_id=None means no score is awarded (e.g. UFO-asteroid collision).
-        """
-        if scorer_id is not None:
-            result.score_deltas[scorer_id] = (
-                result.score_deltas.get(scorer_id, 0) + C.AST_SIZES[ast.size]["score"]
-            )
-            r = uniform(0, 1)
-            if r < C.REPAIR_DROP_CHANCE:
-                result.powerups_to_spawn.append((Vec(ast.pos), "repair"))
-            elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE:
-                result.powerups_to_spawn.append((Vec(ast.pos), "orb"))
-            elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE:
-                result.powerups_to_spawn.append((Vec(ast.pos), "double_shot"))
-            elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE + C.FLAG_DROP_CHANCE:
-                result.powerups_to_spawn.append((Vec(ast.pos), "flag"))
+    	scorer_id=None means no score is awarded (e.g. UFO-asteroid collision).
+    	"""
+    	if scorer_id is not None:
+        	result.score_deltas[scorer_id] = (
+            	result.score_deltas.get(scorer_id, 0) + C.AST_SIZES[ast.size]["score"]
+        	)
+        	r = uniform(0, 1)
+        
+        	# No multiplayer, não dropar repair (vidas infinitas)
+        	if not self.is_multiplayer and r < C.REPAIR_DROP_CHANCE:
+            		result.powerups_to_spawn.append((Vec(ast.pos), "repair"))
+        	elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE:
+            		result.powerups_to_spawn.append((Vec(ast.pos), "orb"))
+        	elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE:
+            		result.powerups_to_spawn.append((Vec(ast.pos), "double_shot"))
+        	elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE + C.POWERUP_DROP_CHANCE + C.FLAG_DROP_CHANCE:
+            		result.powerups_to_spawn.append((Vec(ast.pos), "flag"))
 
-        split = C.AST_SIZES[ast.size]["split"]
-        pos = Vec(ast.pos)
-        ast.kill()
+    	split = C.AST_SIZES[ast.size]["split"]
+    	pos = Vec(ast.pos)
+    	ast.kill()
 
-        result.events.append("asteroid_explosion")
+    	result.events.append("asteroid_explosion")
 
-        for new_size in split:
-            dirv = rand_unit_vec()
-            speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * C.AST_SPLIT_SPEED_MULT
-            result.asteroids_to_spawn.append((pos, dirv * speed, new_size))
+    	for new_size in split:
+        	dirv = rand_unit_vec()
+        	speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * C.AST_SPLIT_SPEED_MULT
+        	result.asteroids_to_spawn.append((pos, dirv * speed, new_size))
