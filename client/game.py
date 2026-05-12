@@ -1,6 +1,6 @@
 """Game loop and scenes (menu, escolha de jogadores, play, game over).
 
-- InputMapper converte teclado em PlayerCommand por jogador.
+- InputMapper: teclado + comando (PS4 / DualSense) → PlayerCommand por jogador.
 - World recebe comandos indexados por player_id.
 """
 
@@ -72,6 +72,9 @@ class Game:
             if event.type == pg.QUIT:
                 self._quit()
 
+            if event.type in (pg.JOYDEVICEADDED, pg.JOYDEVICEREMOVED):
+                self.input_mapper.handle_joystick_connection(event)
+
             if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
                 if self.scene == SceneState.PLAYER_SELECT:
                     self.scene = SceneState.MENU
@@ -79,12 +82,30 @@ class Game:
                 self._quit()
 
             if self.scene == SceneState.MENU:
-                if event.type == pg.KEYDOWN:
+                if event.type == pg.KEYDOWN or (
+                    event.type == pg.JOYBUTTONDOWN
+                    and event.button >= 0
+                ):
                     self.scene = SceneState.PLAYER_SELECT
                     self.player_select_highlight = self.selected_player_count
                 continue
 
             if self.scene == SceneState.PLAYER_SELECT:
+                if event.type == pg.JOYHATMOTION:
+                    _hx, hy = event.value
+                    if hy < 0:
+                        self.player_select_highlight = max(
+                            1, self.player_select_highlight - 1
+                        )
+                    elif hy > 0:
+                        self.player_select_highlight = min(
+                            C.MAX_PLAYERS, self.player_select_highlight + 1
+                        )
+                    continue
+                if event.type == pg.JOYBUTTONDOWN:
+                    if InputMapper.is_menu_confirm(event):
+                        self._start_session(self.player_select_highlight)
+                    continue
                 if event.type != pg.KEYDOWN:
                     continue
                 k = event.key
@@ -114,6 +135,8 @@ class Game:
                     pg.K_KP_ENTER,
                 ):
                     self.scene = SceneState.GAME_OVER_STATS
+                elif InputMapper.is_menu_confirm(event):
+                    self.scene = SceneState.GAME_OVER_STATS
                 continue
 
             if self.scene == SceneState.GAME_OVER_STATS:
@@ -121,6 +144,10 @@ class Game:
                     pg.K_RETURN,
                     pg.K_KP_ENTER,
                 ):
+                    self.world = None
+                    self.scene = SceneState.PLAYER_SELECT
+                    self.player_select_highlight = self.selected_player_count
+                elif InputMapper.is_menu_confirm(event):
                     self.world = None
                     self.scene = SceneState.PLAYER_SELECT
                     self.player_select_highlight = self.selected_player_count

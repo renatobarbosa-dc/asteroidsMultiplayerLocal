@@ -268,7 +268,7 @@ class Renderer:
         sw, sh = self.screen.get_size()
         entries = [
             (self.big, "ASTEROIDS"),
-            (self.font, "ENTER — escolher quantos jogadores (teclado)"),
+            (self.font, "ENTER ou botão do comando — escolher jogadores"),
             (self.font, "ESC — sair"),
         ]
         surfs = [
@@ -303,7 +303,7 @@ class Renderer:
             player_surfs.append(surf)
 
         help1 = self.font.render(
-            "SETAS + ENTER — selecionar jogador",
+            "SETAS / D-pad + ENTER ou Cross — selecionar",
             True,
             self.config.WHITE,
         )
@@ -498,7 +498,7 @@ class Renderer:
     def draw_game_over_summary(self, world: object | None) -> None:
         rows = self._game_over_head_entries(world)
         hint = self.font.render(
-            "ENTER — ver estatísticas",
+            "ENTER ou Cross / Options — ver estatísticas",
             True,
             self.config.WHITE,
         )
@@ -507,7 +507,7 @@ class Renderer:
     def draw_game_over_stats(self, world: object | None) -> None:
         rows = self._game_over_stat_entries(world)
         hint = self.font.render(
-            "ENTER — novo jogo",
+            "ENTER ou Cross / Options — novo jogo",
             True,
             self.config.WHITE,
         )

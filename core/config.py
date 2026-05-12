@@ -137,6 +137,18 @@ FONT_SIZE_SMALL = 22
 FONT_SIZE_LARGE = 64
 FONT_NAME = "consolas"
 
+# Comando / PS4 (SDL): primeiro comando USB = jogador 1, segundo = jogador 2, …
+# Se os botões não baterem com o teu comando, altera os índices (testa com um print).
+JOY_DEADZONE = 0.22
+JOY_AXIS_ROTATE = 0
+JOY_AXIS_THRUST = 1
+# Botões típicos no Windows com DualShock 4: 0 Cross, 1 Circle, 2 Square, 3 Triangle, 4 L1, 5 R1
+JOY_BTN_SHOOT = 0
+JOY_BTN_SPECIAL = 1
+JOY_BTN_SHIELD = 2
+JOY_BTN_HYPER = 3
+JOY_MENU_CONFIRM_BUTTONS = (0, 9)  # Cross, Options (confirmar em menus / fim de jogo)
+
 RANDOM_SEED = None
 
 # Paths (work from any execution directory).
