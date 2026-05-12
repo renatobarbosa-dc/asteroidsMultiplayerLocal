@@ -53,7 +53,7 @@ class World:
         self.bh_duration = 0
 
         self.events: list[str] = []
-        self._collision_mgr = CollisionManager()
+        self._collision_mgr = CollisionManager(is_multiplayer=player_count > 1)
 
         self.game_over = False
         self.winner_id: PlayerId | None = None

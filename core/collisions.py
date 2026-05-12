@@ -27,6 +27,8 @@ class CollisionResult:
 
 class CollisionManager:
     """Resolves all collisions between game entities."""
+    def __init__(self, is_multiplayer: bool = False):
+    	self.is_multiplayer = is_multiplayer
 
     def resolve(
         self,
@@ -214,11 +216,8 @@ class CollisionManager:
             result.score_deltas[scorer_id] = (
                 result.score_deltas.get(scorer_id, 0) + C.AST_SIZES[ast.size]["score"]
             )
-            result.asteroid_destroy_deltas[scorer_id] = (
-                result.asteroid_destroy_deltas.get(scorer_id, 0) + 1
-            )
             r = uniform(0, 1)
-            if r < C.REPAIR_DROP_CHANCE:
+            if not self.is_multiplayer and r < C.REPAIR_DROP_CHANCE:
                 result.powerups_to_spawn.append((Vec(ast.pos), "repair"))
             elif r < C.REPAIR_DROP_CHANCE + C.ORB_DROP_CHANCE:
                 result.powerups_to_spawn.append((Vec(ast.pos), "orb"))
