@@ -27,7 +27,8 @@ class Game:
         pg.init()
         pg.mixer.init()
 
-        self.screen = pg.display.set_mode((C.WIDTH, C.HEIGHT))
+        mode_flags = pg.FULLSCREEN if getattr(C, "FULLSCREEN", False) else 0
+        self.screen = pg.display.set_mode((C.WIDTH, C.HEIGHT), mode_flags)
         pg.display.set_caption("Asteroids")
 
         self.clock = pg.time.Clock()

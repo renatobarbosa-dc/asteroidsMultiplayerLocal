@@ -225,11 +225,7 @@ class World:
         if self.player_count == 1:
             self._update_ufos(enemy_dt)
             self._update_timers(dt)
-        else:
-            # Multiplayer: spawnar UFOs também
-            self._update_ufos(enemy_dt)
-            self._update_timers(dt)
-            
+
         self._handle_collisions()
         self._collect_powerups()
         
@@ -382,38 +378,38 @@ class World:
             self.winner_id = None  # None indica empate
 
     def _handle_collisions(self) -> None:
-    result = self._collision_mgr.resolve(
-        self.ships, self.bullets, self.asteroids, self.ufos, self.black_hole
-    )
+        result = self._collision_mgr.resolve(
+            self.ships, self.bullets, self.asteroids, self.ufos, self.black_hole
+        )
 
-    self.events.extend(result.events)
+        self.events.extend(result.events)
 
-    for player_id, delta in result.score_deltas.items():
-        if player_id in self.scores:
-            self.scores[player_id] += delta
+        for player_id, delta in result.score_deltas.items():
+            if player_id in self.scores:
+                self.scores[player_id] += delta
 
-    for player_id, delta in result.kill_deltas.items():
-        if player_id in self.kills:
-            self.kills[player_id] += delta
-            
-            # Verificar vitória por kills no multiplayer
-            if self.is_multiplayer and self.kills[player_id] >= C.FLAGS_TO_WIN:
-                self.game_over = True
-                self.winner_id = player_id
-                self.events.append("flag_victory")
-                return
+        for player_id, delta in result.kill_deltas.items():
+            if player_id in self.kills:
+                self.kills[player_id] += delta
+                
+                # Verificar vitória por kills no multiplayer
+                if self.is_multiplayer and self.kills[player_id] >= C.FLAGS_TO_WIN:
+                    self.game_over = True
+                    self.winner_id = player_id
+                    self.events.append("flag_victory")
+                    return
 
-    for pos, vel, size in result.asteroids_to_spawn:
-        self.spawn_asteroid(pos, vel, size)
+        for pos, vel, size in result.asteroids_to_spawn:
+            self.spawn_asteroid(pos, vel, size)
 
-    for pos, kind in result.powerups_to_spawn:
-        self.spawn_powerup(pos, kind)
+        for pos, kind in result.powerups_to_spawn:
+            self.spawn_powerup(pos, kind)
 
-    for death in result.ship_deaths:
-        for player_id, is_instakill in death.items():
-            ship = self.get_ship(player_id)
-            if ship is not None:
-                self._ship_die(ship, is_instakill)
+        for death in result.ship_deaths:
+            for player_id, is_instakill in death.items():
+                ship = self.get_ship(player_id)
+                if ship is not None:
+                    self._ship_die(ship, is_instakill)
 
     def _collect_powerups(self) -> None:
         for ship in self.ships.values():
