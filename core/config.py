@@ -68,7 +68,7 @@ FLAG_DROP_CHANCE = 0.15
 FLAGS_TO_WIN = 10
 
 # MULTIPLAYER
-MULTIPLAYER_TIMER_SECONDS = 180.0  # 5 minutos de jogo no modo multiplayer
+MULTIPLAYER_TIMER_SECONDS = 30.0  # multijogador: tempo até o fim da partida (ajusta para testar)
 
 # PARAR TEMPO (HUD / futuro gameplay)
 TIME_STOP_DURATION = 5.0

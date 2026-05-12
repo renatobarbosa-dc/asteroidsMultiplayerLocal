@@ -19,6 +19,7 @@ class CollisionResult:
     events: list[str] = field(default_factory=list)
     score_deltas: dict[PlayerId, int] = field(default_factory=dict)
     kill_deltas: dict[PlayerId, int] = field(default_factory=dict)  # Contador de kills
+    asteroid_destroy_deltas: dict[PlayerId, int] = field(default_factory=dict)
     ship_deaths: list[dict[PlayerId, bool]] = field(default_factory=list)
     asteroids_to_spawn: list[tuple[Vec, Vec, str]] = field(default_factory=list)
     powerups_to_spawn: list[tuple[Vec, str]] = field(default_factory=list)
@@ -212,6 +213,9 @@ class CollisionManager:
         if scorer_id is not None:
             result.score_deltas[scorer_id] = (
                 result.score_deltas.get(scorer_id, 0) + C.AST_SIZES[ast.size]["score"]
+            )
+            result.asteroid_destroy_deltas[scorer_id] = (
+                result.asteroid_destroy_deltas.get(scorer_id, 0) + 1
             )
             r = uniform(0, 1)
             if r < C.REPAIR_DROP_CHANCE:

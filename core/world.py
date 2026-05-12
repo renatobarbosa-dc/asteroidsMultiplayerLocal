@@ -36,6 +36,8 @@ class World:
         self.lives: Dict[PlayerId, int] = {}
         self.flags_collected: Dict[PlayerId, int] = {}
         self.kills: Dict[PlayerId, int] = {}  # Contador de kills (UFOs + jogadores)
+        self.asteroid_destroys: Dict[PlayerId, int] = {}
+        self.powerup_pickups: Dict[PlayerId, int] = {}
         self.player_spawn_positions: Dict[PlayerId, Vec] = {}
         self.wave = 0
         self.wave_cool = float(C.WAVE_DELAY)
@@ -55,6 +57,8 @@ class World:
 
         self.game_over = False
         self.winner_id: PlayerId | None = None
+        self.ended_by_time = False
+        self.victory_reason: str = ""
 
         for pid in range(1, self.player_count + 1):
             self.spawn_player(pid)
@@ -116,6 +120,8 @@ class World:
         self.lives[player_id] = C.START_LIVES
         self.flags_collected[player_id] = 0
         self.kills[player_id] = 0
+        self.asteroid_destroys[player_id] = 0
+        self.powerup_pickups[player_id] = 0
         self.all_sprites.add(ship)
 
     def get_ship(self, player_id: PlayerId) -> Ship | None:
@@ -357,25 +363,32 @@ class World:
                 self.spawn_asteroid(pos, vel, size)
 
     def _end_multiplayer_by_timer(self) -> None:
-        """Determina o vencedor quando o timer acaba."""
-        if not self.kills:
-            # Empate - ninguém matou nada
-            self.game_over = True
+        """Fim do tempo: vence quem tem mais kills; empate → bandeiras → pontos."""
+        self.game_over = True
+        self.ended_by_time = True
+
+        pids = sorted(self.ships.keys())
+        if not pids:
             self.winner_id = None
+            self.victory_reason = "timer_tie"
             return
-        
-        # Encontrar jogador com mais kills
-        max_kills = max(self.kills.values())
-        winners = [pid for pid, k in self.kills.items() if k == max_kills]
-        
+
+        def ranking(pid: PlayerId) -> tuple[int, int, int]:
+            return (
+                int(self.kills.get(pid, 0)),
+                int(self.flags_collected.get(pid, 0)),
+                int(self.scores.get(pid, 0)),
+            )
+
+        best = max(ranking(pid) for pid in pids)
+        winners = [pid for pid in pids if ranking(pid) == best]
+
         if len(winners) == 1:
-            # Temos um vencedor claro
-            self.game_over = True
             self.winner_id = winners[0]
+            self.victory_reason = "timer_most_kills"
         else:
-            # Empate - múltiplos jogadores com mesmo número de kills
-            self.game_over = True
-            self.winner_id = None  # None indica empate
+            self.winner_id = None
+            self.victory_reason = "timer_tie"
 
     def _handle_collisions(self) -> None:
         result = self._collision_mgr.resolve(
@@ -388,16 +401,13 @@ class World:
             if player_id in self.scores:
                 self.scores[player_id] += delta
 
+        for player_id, delta in result.asteroid_destroy_deltas.items():
+            if player_id in self.asteroid_destroys:
+                self.asteroid_destroys[player_id] += delta
+
         for player_id, delta in result.kill_deltas.items():
             if player_id in self.kills:
                 self.kills[player_id] += delta
-                
-                # Verificar vitória por kills no multiplayer
-                if self.is_multiplayer and self.kills[player_id] >= C.FLAGS_TO_WIN:
-                    self.game_over = True
-                    self.winner_id = player_id
-                    self.events.append("flag_victory")
-                    return
 
         for pos, vel, size in result.asteroids_to_spawn:
             self.spawn_asteroid(pos, vel, size)
@@ -441,8 +451,11 @@ class World:
                     if self.flags_collected[ship.player_id] >= C.FLAGS_TO_WIN:
                         self.game_over = True
                         self.winner_id = ship.player_id
+                        self.victory_reason = "flags_10"
                         self.events.append("flag_victory")
 
+                pid = ship.player_id
+                self.powerup_pickups[pid] = self.powerup_pickups.get(pid, 0) + 1
                 powerup.kill()
 
     def _ship_die(self, ship: Ship, is_instakill: bool) -> None:
