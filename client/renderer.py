@@ -298,9 +298,9 @@ class Renderer:
             winner_kills = kills.get(winner_id, 0)
             
             if winner_flags >= self.config.FLAGS_TO_WIN:
-                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras! *{fl}"
+                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras!"
             else:
-                reason = f"Mais kills: {winner_kills} X{kl}"
+                reason = f"Mais kills: {winner_kills}"
             
             self._draw_text(
                 self.font,
