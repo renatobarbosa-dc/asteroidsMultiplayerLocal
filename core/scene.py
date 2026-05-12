@@ -9,4 +9,5 @@ class SceneState(Enum):
     MENU = auto()
     PLAYER_SELECT = auto()
     PLAY = auto()
-    GAME_OVER = auto()
+    GAME_OVER_SUMMARY = auto()
+    GAME_OVER_STATS = auto()

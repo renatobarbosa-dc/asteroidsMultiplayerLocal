@@ -27,7 +27,8 @@ class Game:
         pg.init()
         pg.mixer.init()
 
-        self.screen = pg.display.set_mode((C.WIDTH, C.HEIGHT))
+        mode_flags = pg.FULLSCREEN if getattr(C, "FULLSCREEN", False) else 0
+        self.screen = pg.display.set_mode((C.WIDTH, C.HEIGHT), mode_flags)
         pg.display.set_caption("Asteroids")
 
         self.clock = pg.time.Clock()
@@ -107,8 +108,19 @@ class Game:
                     self._start_session(self.player_select_highlight)
                 continue
 
-            if self.scene == SceneState.GAME_OVER:
-                if event.type == pg.KEYDOWN:
+            if self.scene == SceneState.GAME_OVER_SUMMARY:
+                if event.type == pg.KEYDOWN and event.key in (
+                    pg.K_RETURN,
+                    pg.K_KP_ENTER,
+                ):
+                    self.scene = SceneState.GAME_OVER_STATS
+                continue
+
+            if self.scene == SceneState.GAME_OVER_STATS:
+                if event.type == pg.KEYDOWN and event.key in (
+                    pg.K_RETURN,
+                    pg.K_KP_ENTER,
+                ):
                     self.world = None
                     self.scene = SceneState.PLAYER_SELECT
                     self.player_select_highlight = self.selected_player_count
@@ -128,7 +140,7 @@ class Game:
 
         if self.world.game_over:
             self.audio.stop_all()
-            self.scene = SceneState.GAME_OVER
+            self.scene = SceneState.GAME_OVER_SUMMARY
             return
 
         self.audio.update_thrust(any(c.thrust for c in commands.values()))
@@ -149,8 +161,13 @@ class Game:
             pg.display.flip()
             return
 
-        if self.scene == SceneState.GAME_OVER:
-            self.renderer.draw_game_over(self.world)
+        if self.scene == SceneState.GAME_OVER_SUMMARY:
+            self.renderer.draw_game_over_summary(self.world)
+            pg.display.flip()
+            return
+
+        if self.scene == SceneState.GAME_OVER_STATS:
+            self.renderer.draw_game_over_stats(self.world)
             pg.display.flip()
             return
 

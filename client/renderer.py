@@ -30,6 +30,42 @@ class Renderer:
             UFO: self._draw_ufo,
             BlackHole: self._draw_black_hole,
         }
+        self._emoji_hud_font = self._make_emoji_hud_font()
+
+    def _make_emoji_hud_font(self) -> pg.font.Font | None:
+        """Fonte com glifos de emoji (Consolas não desenha 🚩/☠)."""
+        h = self.font.get_height()
+        for name in ("Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"):
+            f = pg.font.SysFont(name, h)
+            probe = f.render("🚩", True, (255, 255, 255))
+            if probe.get_width() >= 10:
+                return f
+        return None
+
+    def _surf_hud_mp_player_line(
+        self,
+        pid: int,
+        sc: int,
+        fl: int,
+        kl: int,
+        col: tuple[int, int, int],
+    ) -> pg.Surface:
+        prefix = f"P{pid}  {sc:06d}  "
+        s0 = self.font.render(prefix, True, col)
+        emoji_part = f"🚩{fl}  ☠{kl}"
+        plain_part = f"b:{fl}  k:{kl}"
+        em = self._emoji_hud_font
+        if em is not None:
+            s1 = em.render(emoji_part, True, col)
+        else:
+            s1 = self.font.render(plain_part, True, col)
+        w = s0.get_width() + s1.get_width()
+        h = max(s0.get_height(), s1.get_height())
+        out = pg.Surface((w, h), pg.SRCALPHA)
+        out.fill((0, 0, 0, 0))
+        out.blit(s0, (0, (h - s0.get_height()) // 2))
+        out.blit(s1, (s0.get_width(), (h - s1.get_height()) // 2))
+        return out
 
     def clear(self) -> None:
         self.screen.fill(self.config.BLACK)
@@ -51,6 +87,10 @@ class Renderer:
             self._draw_hud_multi(world)
 
     def _draw_hud_single(self, world: object) -> None:
+        sw, sh = self.screen.get_size()
+        rm = 16
+        right = sw - rm
+
         ships = getattr(world, "ships", {})
         scores = getattr(world, "scores", {})
         lives = getattr(world, "lives", {})
@@ -72,7 +112,7 @@ class Renderer:
 
         bar_w = 180
         bar_h = 10
-        bar_x = self.config.WIDTH - 250
+        bar_left = right - bar_w
 
         if double_shot_time > 0.0:
             max_time = float(self.config.DOUBLE_SHOT_DURATION)
@@ -82,9 +122,9 @@ class Renderer:
                 True,
                 self.config.WHITE,
             )
-            self.screen.blit(info, (bar_x, 10))
-            border = pg.Rect(bar_x, 40, bar_w, bar_h)
-            fill = pg.Rect(bar_x, 40, int(bar_w * ratio), bar_h)
+            self.screen.blit(info, (right - info.get_width(), 10))
+            border = pg.Rect(bar_left, 40, bar_w, bar_h)
+            fill = pg.Rect(bar_left, 40, int(bar_w * ratio), bar_h)
             pg.draw.rect(self.screen, self.config.WHITE, border, width=1)
             if fill.width > 0:
                 pg.draw.rect(self.screen, self.config.WHITE, fill, width=0)
@@ -119,12 +159,10 @@ class Renderer:
             shield_ratio = 1.0
 
         shield_y = 56 if double_shot_time > 0.0 else 10
-        self.screen.blit(
-            self.font.render(shield_label, True, self.config.WHITE),
-            (bar_x, shield_y),
-        )
-        shield_border = pg.Rect(bar_x, shield_y + 30, bar_w, bar_h)
-        shield_fill = pg.Rect(bar_x, shield_y + 30, int(bar_w * shield_ratio), bar_h)
+        shield_surf = self.font.render(shield_label, True, self.config.WHITE)
+        self.screen.blit(shield_surf, (right - shield_surf.get_width(), shield_y))
+        shield_border = pg.Rect(bar_left, shield_y + 30, bar_w, bar_h)
+        shield_fill = pg.Rect(bar_left, shield_y + 30, int(bar_w * shield_ratio), bar_h)
         pg.draw.rect(self.screen, self.config.WHITE, shield_border, width=1)
         if shield_fill.width > 0:
             pg.draw.rect(self.screen, self.config.WHITE, shield_fill, width=0)
@@ -137,33 +175,36 @@ class Renderer:
             total = self.config.TIME_STOP_DURATION + self.config.TIME_STOP_COOLDOWN
             ts_ratio = 1.0 - min(1.0, time_stop_cool / total)
         else:
-            ts_label = "PARAR TEMPO PRONTO"
-            ts_ratio = 1.0
+            ts_label = ""
+            ts_ratio = 0.0
 
-        ts_y = shield_y + 56
-        self.screen.blit(
-            self.font.render(ts_label, True, self.config.WHITE), (bar_x, ts_y)
-        )
-        ts_border = pg.Rect(bar_x, ts_y + 30, bar_w, bar_h)
-        ts_fill = pg.Rect(bar_x, ts_y + 30, int(bar_w * ts_ratio), bar_h)
-        pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
-        if ts_fill.width > 0:
-            pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
+        if ts_label:
+            ts_y = shield_y + 56
+            ts_surf = self.font.render(ts_label, True, self.config.WHITE)
+            self.screen.blit(ts_surf, (right - ts_surf.get_width(), ts_y))
+            ts_border = pg.Rect(bar_left, ts_y + 30, bar_w, bar_h)
+            ts_fill = pg.Rect(bar_left, ts_y + 30, int(bar_w * ts_ratio), bar_h)
+            pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
+            if ts_fill.width > 0:
+                pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
 
     def _draw_hud_multi(self, world: object) -> None:
+        sw, sh = self.screen.get_size()
+        margin = 12
+
         # Mostrar timer ao invés de wave
         timer = float(getattr(world, "multiplayer_timer", 0.0))
         minutes = int(timer // 60)
         seconds = int(timer % 60)
         timer_text = f"TEMPO: {minutes}:{seconds:02d}"
         tw = self.font.render(timer_text, True, self.config.WHITE)
-        cx = self.config.WIDTH // 2 - tw.get_width() // 2
+        cx = sw // 2 - tw.get_width() // 2
         self.screen.blit(tw, (cx, 8))
 
         time_stop_timer = float(getattr(world, "time_stop_timer", 0.0))
         time_stop_cool = float(getattr(world, "time_stop_cool", 0.0))
         bar_w, bar_h = 200, 8
-        bar_x = self.config.WIDTH // 2 - bar_w // 2
+        bar_x = sw // 2 - bar_w // 2
         if time_stop_timer > 0.0:
             ts_label = f"PARAR TEMPO {time_stop_timer:.1f}s"
             ts_ratio = min(1.0, time_stop_timer / self.config.TIME_STOP_DURATION)
@@ -172,40 +213,48 @@ class Renderer:
             total = self.config.TIME_STOP_DURATION + self.config.TIME_STOP_COOLDOWN
             ts_ratio = 1.0 - min(1.0, time_stop_cool / total)
         else:
-            ts_label = "PARAR TEMPO PRONTO"
-            ts_ratio = 1.0
+            ts_label = ""
 
-        ts_y = 36
-        self.screen.blit(self.font.render(ts_label, True, self.config.WHITE), (bar_x, ts_y))
-        ts_border = pg.Rect(bar_x, ts_y + 22, bar_w, bar_h)
-        ts_fill = pg.Rect(bar_x, ts_y + 22, int(bar_w * ts_ratio), bar_h)
-        pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
-        if ts_fill.width > 0:
-            pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
+        if ts_label:
+            ts_y = 36
+            self.screen.blit(
+                self.font.render(ts_label, True, self.config.WHITE), (bar_x, ts_y)
+            )
+            ts_border = pg.Rect(bar_x, ts_y + 22, bar_w, bar_h)
+            ts_fill = pg.Rect(bar_x, ts_y + 22, int(bar_w * ts_ratio), bar_h)
+            pg.draw.rect(self.screen, self.config.WHITE, ts_border, width=1)
+            if ts_fill.width > 0:
+                pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
 
         ships = getattr(world, "ships", {})
         scores = getattr(world, "scores", {})
         lives = getattr(world, "lives", {})
         flags = getattr(world, "flags_collected", {})
         kills = getattr(world, "kills", {})
-        corners = [
-            (12, 72),
-            (self.config.WIDTH - 248, 72),
-            (12, self.config.HEIGHT - 88),
-            (self.config.WIDTH - 248, self.config.HEIGHT - 88),
-        ]
+        top_y = 72
+        bot_y = sh - 88
         bar_mini_w = 130
         bar_mini_h = 5
         for idx, pid in enumerate(sorted(ships.keys())):
             ship = ships[pid]
             col = getattr(ship, "color", self.config.WHITE)
-            x, y = corners[idx] if idx < len(corners) else (12, 72)
             sc = int(scores.get(pid, 0))
             lv = int(lives.get(pid, 0))
             fl = int(flags.get(pid, 0))
             kl = int(kills.get(pid, 0))
             # No multiplayer, vidas são infinitas, então mostramos só score, bandeiras e kills
-            line = self.font.render(f"P{pid}  {sc:06d}  🚩{fl}  ☠{kl}", True, col)
+            line = self._surf_hud_mp_player_line(pid, sc, fl, kl, col)
+            lw = line.get_width()
+            if idx == 0:
+                x, y = margin, top_y
+            elif idx == 1:
+                x, y = sw - margin - lw, top_y
+            elif idx == 2:
+                x, y = margin, bot_y
+            elif idx == 3:
+                x, y = sw - margin - lw, bot_y
+            else:
+                x, y = margin, top_y
             self.screen.blit(line, (x, y))
             ratio = min(1.0, max(0.0, ship.special_energy / self.config.SPECIAL_MAX))
             by = y + 26
@@ -216,137 +265,253 @@ class Renderer:
                 pg.draw.rect(self.screen, col, fill)
 
     def draw_menu(self) -> None:
-        self._draw_text(
-            self.big,
-            "ASTEROIDS",
-            self.config.WIDTH // 2 - 170,
-            120,
-        )
-        self._draw_text(
-            self.font,
-            "ENTER — escolher quantos jogadores (teclado)",
-            self.config.WIDTH // 2 - 320,
-            210,
-        )
-        self._draw_text(
-            self.font,
-            "Mandos (ex.: PlayStation) serão suportados numa atualização futura.",
-            self.config.WIDTH // 2 - 420,
-            250,
-        )
-        self._draw_text(
-            self.font,
-            "Qualquer outra tecla também abre o menu de jogadores",
-            self.config.WIDTH // 2 - 360,
-            290,
-        )
-        self._draw_text(
-            self.font,
-            "ESC — sair",
-            self.config.WIDTH // 2 - 80,
-            330,
-        )
+        sw, sh = self.screen.get_size()
+        entries = [
+            (self.big, "ASTEROIDS"),
+            (self.font, "ENTER — escolher quantos jogadores (teclado)"),
+            (self.font, "ESC — sair"),
+        ]
+        surfs = [
+            font.render(text, True, self.config.WHITE) for font, text in entries
+        ]
+        gap_after_title = 32
+        gap_between = 14
+        total_h = surfs[0].get_height() + gap_after_title
+        for i, s in enumerate(surfs[1:], start=1):
+            total_h += s.get_height()
+            if i < len(surfs) - 1:
+                total_h += gap_between
+        y = max(24, (sh - total_h) // 2)
+        for i, surf in enumerate(surfs):
+            x = sw // 2 - surf.get_width() // 2
+            self.screen.blit(surf, (x, y))
+            if i < len(surfs) - 1:
+                gap = gap_after_title if i == 0 else gap_between
+                y += surf.get_height() + gap
 
     def draw_player_select(self, highlight: int) -> None:
-        self._draw_text(
-            self.big,
-            "JOGADORES",
-            self.config.WIDTH // 2 - 160,
-            100,
-        )
+        sw, sh = self.screen.get_size()
         h = max(1, min(4, int(highlight)))
-        y0 = 220
+
+        title_surf = self.big.render("JOGADORES", True, self.config.WHITE)
+        player_surfs: list[pg.Surface] = []
         for n in range(1, 5):
             prefix = ">" if n == h else " "
             col = self.config.PLAYER_COLORS.get(n, self.config.WHITE)
             line = f"{prefix}  {n} jogador{'es' if n != 1 else ''}"
             surf = self.font.render(line, True, col if n == h else self.config.GRAY)
-            self.screen.blit(surf, (self.config.WIDTH // 2 - 120, y0 + (n - 1) * 40))
+            player_surfs.append(surf)
 
-        self._draw_text(
-            self.font,
-            "Tecla 1, 2, 3 ou 4 — começar já   |   SETAS + ENTER — confirmar",
-            self.config.WIDTH // 2 - 380,
-            420,
+        help1 = self.font.render(
+            "SETAS + ENTER — selecionar jogador",
+            True,
+            self.config.WHITE,
         )
-        self._draw_text(
-            self.font,
+        help2 = self.font.render(
             "ESC — voltar ao menu inicial",
-            self.config.WIDTH // 2 - 180,
-            460,
+            True,
+            self.config.WHITE,
         )
 
-    def draw_game_over(self, world: object = None) -> None:
-        winner_id = getattr(world, "winner_id", None) if world else None
-        is_multiplayer = getattr(world, "is_multiplayer", False) if world else False
-        flags = getattr(world, "flags_collected", {}) if world else {}
-        kills = getattr(world, "kills", {}) if world else {}
-        
-        if winner_id is not None:
-            player_color = self.config.PLAYER_COLORS.get(winner_id, self.config.WHITE)
-            title = f"JOGADOR {winner_id} VENCEU!"
-            title_surf = self.big.render(title, True, player_color)
-            self._draw_text(
-                self.big,
-                title,
-                self.config.WIDTH // 2 - title_surf.get_width() // 2,
-                200,
-            )
-            
-            # Verificar se foi por bandeiras ou por kills
-            winner_flags = flags.get(winner_id, 0)
-            winner_kills = kills.get(winner_id, 0)
-            
-            if winner_flags >= self.config.FLAGS_TO_WIN:
-                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras! 🚩"
-            else:
-                reason = f"Mais kills: {winner_kills} ☠"
-            
-            self._draw_text(
-                self.font,
-                reason,
-                self.config.WIDTH // 2 - 150,
-                280,
-            )
-            
-        elif is_multiplayer and winner_id is None:
-            # Empate no multiplayer
-            self._draw_text(
-                self.big,
-                "EMPATE!",
-                self.config.WIDTH // 2 - 120,
-                220,
-            )
-            
-            # Mostrar estatísticas dos jogadores
-            if kills:
-                y_offset = 290
-                for pid in sorted(kills.keys()):
-                    col = self.config.PLAYER_COLORS.get(pid, self.config.WHITE)
-                    kl = kills.get(pid, 0)
-                    stat_line = f"P{pid}: {kl} kills"
-                    self._draw_text(
-                        self.font,
-                        stat_line,
-                        self.config.WIDTH // 2 - 80,
-                        y_offset,
-                    )
-                    y_offset += 30
-        else:
-            # Game over normal (single player)
-            self._draw_text(
-                self.big,
-                "GAME OVER",
-                self.config.WIDTH // 2 - 170,
-                260,
-            )
-        
-        self._draw_text(
-            self.font,
-            "(Qualquer tecla — voltar ao menu de jogadores)",
-            self.config.WIDTH // 2 - 320,
-            self.config.HEIGHT - 80,
+        gap_after_title = 32
+        gap_between_players = 12
+        gap_before_help = 36
+        gap_help = 14
+
+        total_h = title_surf.get_height() + gap_after_title
+        for i, s in enumerate(player_surfs):
+            total_h += s.get_height()
+            if i < len(player_surfs) - 1:
+                total_h += gap_between_players
+        total_h += gap_before_help + help1.get_height() + gap_help + help2.get_height()
+
+        y = max(24, (sh - total_h) // 2)
+
+        self.screen.blit(
+            title_surf,
+            (sw // 2 - title_surf.get_width() // 2, y),
         )
+        y += title_surf.get_height() + gap_after_title
+
+        for i, surf in enumerate(player_surfs):
+            self.screen.blit(
+                surf,
+                (sw // 2 - surf.get_width() // 2, y),
+            )
+            y += surf.get_height()
+            if i < len(player_surfs) - 1:
+                y += gap_between_players
+
+        y += gap_before_help
+        self.screen.blit(help1, (sw // 2 - help1.get_width() // 2, y))
+        y += help1.get_height() + gap_help
+        self.screen.blit(help2, (sw // 2 - help2.get_width() // 2, y))
+
+    @staticmethod
+    def _format_stat_leaders(counts: dict[int, int]) -> str:
+        if not counts:
+            return "—"
+        best = max(counts.values())
+        if best <= 0:
+            return "—"
+        top = [p for p, v in counts.items() if v == best]
+        names = ", ".join(f"P{p}" for p in sorted(top))
+        return f"{names} ({best})"
+
+    def _game_over_head_entries(
+        self, world: object | None
+    ) -> list[tuple[pg.font.Font, str, tuple[int, int, int]]]:
+        w = world
+        winner_id = getattr(w, "winner_id", None) if w else None
+        is_multiplayer = getattr(w, "is_multiplayer", False) if w else False
+        flags = getattr(w, "flags_collected", {}) if w else {}
+        ended_by_time = getattr(w, "ended_by_time", False) if w else False
+        vr = getattr(w, "victory_reason", "") if w else ""
+
+        head: list[tuple[pg.font.Font, str, tuple[int, int, int]]] = []
+        if winner_id is not None:
+            col = self.config.PLAYER_COLORS.get(winner_id, self.config.WHITE)
+            wf = int(flags.get(winner_id, 0))
+            head.append((self.big, f"JOGADOR {winner_id} VENCEU!", col))
+            if vr == "flags_10":
+                head.append(
+                    (
+                        self.font,
+                        f"Primeiro a {self.config.FLAGS_TO_WIN} bandeiras (pique-bandeira).",
+                        self.config.WHITE,
+                    )
+                )
+            elif vr == "timer_most_kills":
+                head.append(
+                    (self.font, "Fim de jogo — tempo esgotado", self.config.WHITE)
+                )
+                head.append(
+                    (
+                        self.font,
+                        "Vence quem tinha mais kills",
+                        self.config.WHITE,
+                    )
+                )
+            elif ended_by_time:
+                head.append(
+                    (self.font, "Fim de jogo — tempo esgotado", self.config.WHITE)
+                )
+            elif wf >= self.config.FLAGS_TO_WIN:
+                head.append(
+                    (
+                        self.font,
+                        f"Chegou a {self.config.FLAGS_TO_WIN} bandeiras!",
+                        self.config.WHITE,
+                    )
+                )
+            else:
+                head.append(
+                    (
+                        self.font,
+                        f"Bandeiras no fim: {wf}",
+                        self.config.WHITE,
+                    )
+                )
+        elif is_multiplayer and winner_id is None:
+            if ended_by_time and vr == "timer_tie":
+                head.append((self.big, "FIM DE JOGO", self.config.WHITE))
+                head.append(
+                    (
+                        self.font,
+                        "Tempo esgotado — empate",
+                        self.config.WHITE,
+                    )
+                )
+            elif ended_by_time:
+                head.append((self.big, "FIM DE JOGO", self.config.WHITE))
+                head.append(
+                    (self.font, "Tempo esgotado", self.config.WHITE)
+                )
+            else:
+                head.append((self.big, "EMPATE!", self.config.WHITE))
+        else:
+            head.append((self.big, "GAME OVER", self.config.WHITE))
+        return head
+
+    def _game_over_stat_entries(
+        self, world: object | None
+    ) -> list[tuple[pg.font.Font, str, tuple[int, int, int]]]:
+        w = world
+        flags = getattr(w, "flags_collected", {}) if w else {}
+        kills = getattr(w, "kills", {}) if w else {}
+        ast_d = getattr(w, "asteroid_destroys", {}) if w else {}
+        pwr = getattr(w, "powerup_pickups", {}) if w else {}
+
+        lk = self._format_stat_leaders(kills)
+        lf = self._format_stat_leaders(flags)
+        la = self._format_stat_leaders(ast_d)
+        lp = self._format_stat_leaders(pwr)
+
+        stats: list[tuple[pg.font.Font, str, tuple[int, int, int]]] = [
+            (self.big, "ESTATÍSTICAS", self.config.VIOLET),
+            (self.font, f"Mais bandeiras: {lf}", self.config.WHITE),
+            (self.font, f"Mais kills: {lk}", self.config.WHITE),
+            (self.font, f"Mais asteróides destruídos: {la}", self.config.WHITE),
+            (self.font, f"Mais power-ups recolhidos: {lp}", self.config.WHITE),
+        ]
+
+        pids = sorted(set(kills) | set(flags) | set(ast_d) | set(pwr))
+        if pids:
+            stats.append((self.font, "Por jogador", self.config.WHITE))
+            for pid in pids:
+                fl = int(flags.get(pid, 0))
+                k = int(kills.get(pid, 0))
+                a = int(ast_d.get(pid, 0))
+                p = int(pwr.get(pid, 0))
+                col = self.config.PLAYER_COLORS.get(pid, self.config.WHITE)
+                line = (
+                    f"  P{pid}   bandeiras {fl}  |  kills {k}  |  astr {a}  |  power {p}"
+                )
+                stats.append((self.font, line, col))
+
+        return stats
+
+    def _blit_centered_column(
+        self,
+        rows: list[tuple[pg.font.Font, str, tuple[int, int, int]]],
+        gap: int,
+        footer: pg.Surface | None,
+        footer_gap: int,
+    ) -> None:
+        sw, sh = self.screen.get_size()
+        surfs = [f.render(t, True, c) for f, t, c in rows]
+        total_h = sum(s.get_height() for s in surfs)
+        if surfs:
+            total_h += (len(surfs) - 1) * gap
+        if footer is not None:
+            total_h += footer_gap + footer.get_height()
+        y = max(24, (sh - total_h) // 2)
+        for i, surf in enumerate(surfs):
+            self.screen.blit(surf, (sw // 2 - surf.get_width() // 2, y))
+            y += surf.get_height()
+            if i < len(surfs) - 1:
+                y += gap
+        if footer is not None:
+            y += footer_gap
+            self.screen.blit(footer, (sw // 2 - footer.get_width() // 2, y))
+
+    def draw_game_over_summary(self, world: object | None) -> None:
+        rows = self._game_over_head_entries(world)
+        hint = self.font.render(
+            "ENTER — ver estatísticas",
+            True,
+            self.config.WHITE,
+        )
+        self._blit_centered_column(rows, gap=14, footer=hint, footer_gap=40)
+
+    def draw_game_over_stats(self, world: object | None) -> None:
+        rows = self._game_over_stat_entries(world)
+        hint = self.font.render(
+            "ENTER — novo jogo",
+            True,
+            self.config.WHITE,
+        )
+        self._blit_centered_column(rows, gap=10, footer=hint, footer_gap=32)
 
     def _draw_text(
         self,
