@@ -35,10 +35,15 @@ class World:
         self.scores: Dict[PlayerId, int] = {}
         self.lives: Dict[PlayerId, int] = {}
         self.flags_collected: Dict[PlayerId, int] = {}
+        self.kills: Dict[PlayerId, int] = {}  # Contador de kills (UFOs + jogadores)
         self.player_spawn_positions: Dict[PlayerId, Vec] = {}
         self.wave = 0
         self.wave_cool = float(C.WAVE_DELAY)
         self.ufo_timer = float(C.UFO_SPAWN_EVERY)
+
+        # Timer para modo multiplayer (só ativo quando player_count > 1)
+        self.multiplayer_timer = float(C.MULTIPLAYER_TIMER_SECONDS) if player_count > 1 else 0.0
+        self.is_multiplayer = player_count > 1
 
         self.black_hole = None
         # blackhole spawn period
@@ -110,6 +115,7 @@ class World:
         self.scores[player_id] = 0
         self.lives[player_id] = C.START_LIVES
         self.flags_collected[player_id] = 0
+        self.kills[player_id] = 0
         self.all_sprites.add(ship)
 
     def get_ship(self, player_id: PlayerId) -> Ship | None:
@@ -219,9 +225,18 @@ class World:
         if self.player_count == 1:
             self._update_ufos(enemy_dt)
             self._update_timers(dt)
+        else:
+            # Multiplayer: spawnar UFOs também
+            self._update_ufos(enemy_dt)
+            self._update_timers(dt)
+            
         self._handle_collisions()
         self._collect_powerups()
-        self._maybe_start_next_wave(dt)
+        
+        if self.is_multiplayer:
+            self._update_multiplayer_mode(dt)
+        else:
+            self._maybe_start_next_wave(dt)
 
     def _apply_commands(
         self,
@@ -299,28 +314,106 @@ class World:
             self.start_wave()
             self.wave_cool = float(C.WAVE_DELAY)
 
+    def _update_multiplayer_mode(self, dt: float) -> None:
+        """Gerencia timer e spawning contínuo em modo multiplayer."""
+        # Decrementar timer
+        if self.multiplayer_timer > 0.0:
+            self.multiplayer_timer -= dt
+            
+            # Timer acabou - determinar vencedor
+            if self.multiplayer_timer <= 0.0:
+                self.multiplayer_timer = 0.0
+                self._end_multiplayer_by_timer()
+                return
+        
+        # Spawnar asteroides continuamente (não por waves)
+        # Manter sempre entre 4-8 asteroides no campo
+        asteroid_count = len(self.asteroids)
+        target_asteroids = 6
+        
+        if asteroid_count < target_asteroids:
+            # Spawnar novos asteroides
+            ship_positions = [s.pos for s in self.ships.values()]
+            
+            for _ in range(target_asteroids - asteroid_count):
+                pos = rand_edge_pos()
+                # Garantir que não spawne muito perto de nenhum jogador
+                attempts = 0
+                while attempts < 20 and any(
+                    (pos - sp).length() < C.AST_MIN_SPAWN_DIST for sp in ship_positions
+                ):
+                    pos = rand_edge_pos()
+                    attempts += 1
+                
+                ang = uniform(0, math.tau)
+                speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX)
+                vel = Vec(math.cos(ang), math.sin(ang)) * speed
+                
+                # 60% Large, 30% Medium, 10% Small
+                r = uniform(0, 1)
+                if r < 0.6:
+                    size = "L"
+                elif r < 0.9:
+                    size = "M"
+                else:
+                    size = "S"
+                    
+                self.spawn_asteroid(pos, vel, size)
+
+    def _end_multiplayer_by_timer(self) -> None:
+        """Determina o vencedor quando o timer acaba."""
+        if not self.kills:
+            # Empate - ninguém matou nada
+            self.game_over = True
+            self.winner_id = None
+            return
+        
+        # Encontrar jogador com mais kills
+        max_kills = max(self.kills.values())
+        winners = [pid for pid, k in self.kills.items() if k == max_kills]
+        
+        if len(winners) == 1:
+            # Temos um vencedor claro
+            self.game_over = True
+            self.winner_id = winners[0]
+        else:
+            # Empate - múltiplos jogadores com mesmo número de kills
+            self.game_over = True
+            self.winner_id = None  # None indica empate
+
     def _handle_collisions(self) -> None:
-        result = self._collision_mgr.resolve(
-            self.ships, self.bullets, self.asteroids, self.ufos, self.black_hole
-        )
+    result = self._collision_mgr.resolve(
+        self.ships, self.bullets, self.asteroids, self.ufos, self.black_hole
+    )
 
-        self.events.extend(result.events)
+    self.events.extend(result.events)
 
-        for player_id, delta in result.score_deltas.items():
-            if player_id in self.scores:
-                self.scores[player_id] += delta
+    for player_id, delta in result.score_deltas.items():
+        if player_id in self.scores:
+            self.scores[player_id] += delta
 
-        for pos, vel, size in result.asteroids_to_spawn:
-            self.spawn_asteroid(pos, vel, size)
+    for player_id, delta in result.kill_deltas.items():
+        if player_id in self.kills:
+            self.kills[player_id] += delta
+            
+            # Verificar vitória por kills no multiplayer
+            if self.is_multiplayer and self.kills[player_id] >= C.FLAGS_TO_WIN:
+                self.game_over = True
+                self.winner_id = player_id
+                self.events.append("flag_victory")
+                return
 
-        for pos, kind in result.powerups_to_spawn:
-            self.spawn_powerup(pos, kind)
+    for pos, vel, size in result.asteroids_to_spawn:
+        self.spawn_asteroid(pos, vel, size)
 
-        for death in result.ship_deaths:
-            for player_id, is_instakill in death.items():
-                ship = self.get_ship(player_id)
-                if ship is not None:
-                    self._ship_die(ship, is_instakill)
+    for pos, kind in result.powerups_to_spawn:
+        self.spawn_powerup(pos, kind)
+
+    for death in result.ship_deaths:
+        for player_id, is_instakill in death.items():
+            ship = self.get_ship(player_id)
+            if ship is not None:
+                self._ship_die(ship, is_instakill)
 
     def _collect_powerups(self) -> None:
         for ship in self.ships.values():
@@ -360,20 +453,31 @@ class World:
         pid = ship.player_id
         self.lives[pid] -= 1
 
+        if self.is_multiplayer:
+            # Respawn imediato no multiplayer
+            base = self.player_spawn_positions.get(pid, Vec(C.WIDTH / 2, C.HEIGHT / 2))
+            safe = self._clamp_pos_to_screen(Vec(base))
+            ship.pos.xy = (safe.x, safe.y)
+            ship.vel.xy = (0, 0)
+            ship.angle = -90.0
+            ship.invuln = float(C.SAFE_SPAWN_TIME)
+            self.events.append("ship_explosion")
+            return
+
+        # Modo single player - lógica original
         if self.lives[pid] <= 0 or is_instakill:
-            # Eliminate the player permanently
+            # Eliminar o jogador permanentemente
             self.lives[pid] = 0
             ship.kill()
             del self.ships[pid]
             self.events.append("ship_explosion")
 
             alive = [p for p, v in self.lives.items() if v > 0]
-            # Solo: game over immediately; multiplayer: last one standing wins
-            if self.player_count == 1 or len(alive) <= 1:
+            if len(alive) == 0:
                 self.game_over = True
             return
 
-        # Still has lives — respawn in place
+        # Ainda tem vidas — respawn no lugar
         base = self.player_spawn_positions.get(pid, Vec(C.WIDTH / 2, C.HEIGHT / 2))
         safe = self._clamp_pos_to_screen(Vec(base))
         ship.pos.xy = (safe.x, safe.y)

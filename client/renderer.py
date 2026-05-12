@@ -151,8 +151,12 @@ class Renderer:
             pg.draw.rect(self.screen, self.config.WHITE, ts_fill)
 
     def _draw_hud_multi(self, world: object) -> None:
-        wave = int(getattr(world, "wave", 0))
-        tw = self.font.render(f"WAVE {wave}", True, self.config.WHITE)
+        # Mostrar timer ao invés de wave
+        timer = float(getattr(world, "multiplayer_timer", 0.0))
+        minutes = int(timer // 60)
+        seconds = int(timer % 60)
+        timer_text = f"TEMPO: {minutes}:{seconds:02d}"
+        tw = self.font.render(timer_text, True, self.config.WHITE)
         cx = self.config.WIDTH // 2 - tw.get_width() // 2
         self.screen.blit(tw, (cx, 8))
 
@@ -183,6 +187,7 @@ class Renderer:
         scores = getattr(world, "scores", {})
         lives = getattr(world, "lives", {})
         flags = getattr(world, "flags_collected", {})
+        kills = getattr(world, "kills", {})
         corners = [
             (12, 72),
             (self.config.WIDTH - 248, 72),
@@ -198,7 +203,9 @@ class Renderer:
             sc = int(scores.get(pid, 0))
             lv = int(lives.get(pid, 0))
             fl = int(flags.get(pid, 0))
-            line = self.font.render(f"P{pid}  {sc:06d}  x{lv}  🚩{fl}", True, col)
+            kl = int(kills.get(pid, 0))
+            # No multiplayer, vidas são infinitas, então mostramos só score, bandeiras e kills
+            line = self.font.render(f"P{pid}  {sc:06d}  🚩{fl}  ☠{kl}", True, col)
             self.screen.blit(line, (x, y))
             ratio = min(1.0, max(0.0, ship.special_energy / self.config.SPECIAL_MAX))
             by = y + 26
@@ -271,9 +278,11 @@ class Renderer:
 
     def draw_game_over(self, world: object = None) -> None:
         winner_id = getattr(world, "winner_id", None) if world else None
+        is_multiplayer = getattr(world, "is_multiplayer", False) if world else False
+        flags = getattr(world, "flags_collected", {}) if world else {}
+        kills = getattr(world, "kills", {}) if world else {}
         
         if winner_id is not None:
-            # Vitória por bandeiras
             player_color = self.config.PLAYER_COLORS.get(winner_id, self.config.WHITE)
             title = f"JOGADOR {winner_id} VENCEU!"
             title_surf = self.big.render(title, True, player_color)
@@ -281,16 +290,50 @@ class Renderer:
                 self.big,
                 title,
                 self.config.WIDTH // 2 - title_surf.get_width() // 2,
-                220,
+                200,
             )
+            
+            # Verificar se foi por bandeiras ou por kills
+            winner_flags = flags.get(winner_id, 0)
+            winner_kills = kills.get(winner_id, 0)
+            
+            if winner_flags >= self.config.FLAGS_TO_WIN:
+                reason = f"Coletou {self.config.FLAGS_TO_WIN} bandeiras! 🚩"
+            else:
+                reason = f"Mais kills: {winner_kills} ☠"
+            
             self._draw_text(
                 self.font,
-                f"Coletou {self.config.FLAGS_TO_WIN} bandeiras!",
-                self.config.WIDTH // 2 - 180,
-                300,
+                reason,
+                self.config.WIDTH // 2 - 150,
+                280,
             )
+            
+        elif is_multiplayer and winner_id is None:
+            # Empate no multiplayer
+            self._draw_text(
+                self.big,
+                "EMPATE!",
+                self.config.WIDTH // 2 - 120,
+                220,
+            )
+            
+            # Mostrar estatísticas dos jogadores
+            if kills:
+                y_offset = 290
+                for pid in sorted(kills.keys()):
+                    col = self.config.PLAYER_COLORS.get(pid, self.config.WHITE)
+                    kl = kills.get(pid, 0)
+                    stat_line = f"P{pid}: {kl} kills"
+                    self._draw_text(
+                        self.font,
+                        stat_line,
+                        self.config.WIDTH // 2 - 80,
+                        y_offset,
+                    )
+                    y_offset += 30
         else:
-            # Game over normal
+            # Game over normal (single player)
             self._draw_text(
                 self.big,
                 "GAME OVER",
@@ -302,7 +345,7 @@ class Renderer:
             self.font,
             "(Qualquer tecla — voltar ao menu de jogadores)",
             self.config.WIDTH // 2 - 320,
-            360,
+            self.config.HEIGHT - 80,
         )
 
     def _draw_text(
